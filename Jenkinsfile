@@ -1,78 +1,84 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    ACR_LOGIN_SERVER = "demovanshacr.azurecr.io"
-    IMAGE_NAME       = "demo-app"
-    AKS_NAMESPACE    = "demo-app"
-  }
-
-  triggers {
-    githubPush()
-  }
-
-  stages {
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    environment {
+        ACR_LOGIN_SERVER = 'demovanshacr.azurecr.io'
+        IMAGE_NAME       = 'demo-app'
+        AKS_NAMESPACE    = 'demo-app'
     }
 
-    stage('Build Docker image') {
-      steps {
-        script {
-          def tag = "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${env.BUILD_NUMBER}"
-          sh """
-            docker build -t ${tag} .
-          """
-          env.BUILD_IMAGE = tag
+    triggers {
+        githubPush()
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-      }
-    }
 
-    stage('Login & Push to ACR') {
-      steps {
-        withCredentials([usernamePassword(
-          credentialsId: 'acr-sp',
-          usernameVariable: 'ACR_USER',
-          passwordVariable: 'ACR_PASS'
-        )]) {
-          sh """
-            echo "$ACR_PASS" | docker login ${ACR_LOGIN_SERVER} \
-              -u "$ACR_USER" --password-stdin
-            docker push ${BUILD_IMAGE}
-            docker logout ${ACR_LOGIN_SERVER}
-          """
+        stage('Build Docker image') {
+            steps {
+                script {
+                    env.BUILD_IMAGE = "${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${env.BUILD_NUMBER}"
+                    sh """
+                      docker build -t ${env.BUILD_IMAGE} .
+                    """
+                }
+            }
         }
-      }
-    }
 
-    stage('Deploy to AKS via Helm') {
-      steps {
-        withCredentials([file(credentialsId: 'aks-kubeconfig', variable: 'KUBECONFIG_FILE')]) {
-          sh """
-            export KUBECONFIG=${KUBECONFIG_FILE}
-
-            helm upgrade --install demo-app helm/demo-app \
-              --namespace ${AKS_NAMESPACE} --create-namespace \
-              --set image.repository=${ACR_LOGIN_SERVER}/${IMAGE_NAME} \
-              --set image.tag=${env.BUILD_NUMBER}
-          """
+        stage('Login & Push to ACR') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'acr-sp',
+                    usernameVariable: 'ACR_USER',
+                    passwordVariable: 'ACR_PASS'
+                )]) {
+                    sh """
+                      echo "${ACR_PASS}" | docker login ${ACR_LOGIN_SERVER} \
+                        -u "${ACR_USER}" --password-stdin
+                      docker push ${env.BUILD_IMAGE}
+                      docker logout ${ACR_LOGIN_SERVER}
+                    """
+                }
+            }
         }
-      }
-    }
-  }
 
-  post {
-    success {
-      emailext subject: "demo-app: SUCCESS (${env.BUILD_NUMBER})",
-               to: 'ananda.yashaswi@quokkalabs.com, ayush.vashishth@quokkalabs.com',
-               body: "Build ${env.BUILD_NUMBER} succeeded. Image: ${env.BUILD_IMAGE}"
+        stage('Deploy to AKS via Helm') {
+            steps {
+                withCredentials([file(
+                    credentialsId: 'aks-kubeconfig',
+                    variable: 'KUBECONFIG_FILE'
+                )]) {
+                    sh """
+                      export KUBECONFIG=${KUBECONFIG_FILE}
+
+                      helm upgrade --install demo-app helm/demo-app \
+                        --namespace ${AKS_NAMESPACE} --create-namespace \
+                        --set image.repository=${ACR_LOGIN_SERVER}/${IMAGE_NAME} \
+                        --set image.tag=${env.BUILD_NUMBER}
+                    """
+                }
+            }
+        }
     }
-    failure {
-      emailext subject: "demo-app: FAILED (${env.BUILD_NUMBER})",
-               to: 'ananda.yashaswi@quokkalabs.com, ayush.vashishth@quokkalabs.com',
-               body: "Build ${env.BUILD_NUMBER} failed. Check Jenkins logs."
+
+    post {
+        success {
+            emailext(
+                subject: "demo-app: SUCCESS (${env.BUILD_NUMBER})",
+                to: 'ananda.yashaswi@quokkalabs.com, ayush.vashishth@quokkalabs.com',
+                body: "Build ${env.BUILD_NUMBER} succeeded. Image: ${env.BUILD_IMAGE}"
+            )
+        }
+        failure {
+            emailext(
+                subject: "demo-app: FAILED (${env.BUILD_NUMBER})",
+                to: 'ananda.yashaswi@quokkalabs.com, ayush.vashishth@quokkalabs.com',
+                body: "Build ${env.BUILD_NUMBER} failed. Check Jenkins logs."
+            )
+        }
     }
-  }
 }
