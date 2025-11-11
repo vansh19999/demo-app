@@ -47,22 +47,21 @@ pipeline {
       }
     }
 
-stage('Deploy to AKS via Helm') {
-  steps {
-    withCredentials([file(credentialsId: 'aks-kubeconfig', variable: 'KUBECONFIG_FILE')]) {
-      sh """
-        export KUBECONFIG=${KUBECONFIG_FILE}
+    stage('Deploy to AKS via Helm') {
+      steps {
+        withCredentials([file(credentialsId: 'aks-kubeconfig', variable: 'KUBECONFIG_FILE')]) {
+          sh """
+            export KUBECONFIG=${KUBECONFIG_FILE}
 
-        # Set image tag dynamically (repo:tag) for this release
-        helm upgrade --install demo-app helm/demo-app \
-          --namespace demo-app --create-namespace \
-          --set image.repository=${ACR_LOGIN_SERVER}/${IMAGE_NAME} \
-          --set image.tag=${env.BUILD_NUMBER}
-      """
+            helm upgrade --install demo-app helm/demo-app \
+              --namespace ${AKS_NAMESPACE} --create-namespace \
+              --set image.repository=${ACR_LOGIN_SERVER}/${IMAGE_NAME} \
+              --set image.tag=${env.BUILD_NUMBER}
+          """
+        }
+      }
     }
   }
-}
-
 
   post {
     success {
