@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        ACR_LOGIN_SERVER = 'demovanshacr.azurecr.io'
+        ACR_LOGIN_SERVER = 'vanshdemoacr123.azurecr.io'
         IMAGE_NAME       = 'demo-app'
         AKS_NAMESPACE    = 'demo-app'
     }
